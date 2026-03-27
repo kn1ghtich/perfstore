@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm create:*)",
+      "Bash(npm install:*)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(PGPASSWORD=1234 psql -U postgres -h localhost -p 5432 -l)",
+      "Bash(PGPASSWORD=1234 \"/c/Program Files/PostgreSQL/18/bin/psql.exe\" -U postgres -h localhost -p 5432 -l)",
+      "Bash(node -e \"const pool = require\\(''./src/config/db''\\); pool.query\\(\"\"SELECT image_url FROM products LIMIT 3\"\"\\).then\\(r => { console.log\\(r.rows\\); pool.end\\(\\); }\\).catch\\(e => { console.error\\(e.message\\); pool.end\\(\\); }\\)\")"
+    ]
+  }
+}
