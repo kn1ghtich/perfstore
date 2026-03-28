@@ -13,6 +13,10 @@ const env = {
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
   OLLAMA_URL: process.env.OLLAMA_URL || 'http://localhost:11434',
   OLLAMA_MODEL: process.env.OLLAMA_MODEL || 'llama3.2',
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
+  OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY || '',
+  GEMINI_MODEL: process.env.GEMINI_MODEL || 'gemini-2.0-flash',
 };
 
 module.exports = env;

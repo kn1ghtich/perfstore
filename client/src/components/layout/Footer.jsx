@@ -34,9 +34,7 @@ export default function Footer() {
             </ul>
           </div>
         </div>
-        <div className="border-t border-gray-800 mt-8 pt-8 text-center text-sm">
-          {t('footer.copyright', { year: new Date().getFullYear() })}
-        </div>
+
       </div>
     </footer>
   );

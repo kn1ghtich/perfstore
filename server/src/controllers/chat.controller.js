@@ -1,6 +1,21 @@
 const { v4: uuidv4 } = require('uuid');
 const ChatSession = require('../models/ChatSession');
-const ollamaService = require('../services/ollama.service');
+const env = require('../config/env');
+
+// Priority: Gemini (free) > OpenAI > Ollama (local)
+function getAiService() {
+  if (env.GEMINI_API_KEY) {
+    console.log('[Chat] Using Gemini AI service');
+    return require('../services/gemini.service');
+  }
+  if (env.OPENAI_API_KEY) {
+    console.log('[Chat] Using OpenAI service');
+    return require('../services/openai.service');
+  }
+  console.log('[Chat] Using Ollama (local) service');
+  return require('../services/ollama.service');
+}
+const aiService = getAiService();
 
 async function createSession(req, res, next) {
   try {
@@ -60,12 +75,12 @@ async function sendMessage(req, res, next) {
     let fullResponse = '';
 
     try {
-      for await (const token of ollamaService.streamChat(session.messages)) {
+      for await (const token of aiService.streamChat(session.messages)) {
         fullResponse += token;
         res.write(`data: ${JSON.stringify({ token })}\n\n`);
       }
-    } catch (ollamaErr) {
-      // If Ollama is not available, send a fallback message
+    } catch (aiErr) {
+      console.error('[Chat] AI service error:', aiErr.message);
       const fallback = "I'm sorry, the AI consultant is currently unavailable. Please try again later or browse our catalog for perfume recommendations.";
       fullResponse = fallback;
       res.write(`data: ${JSON.stringify({ token: fallback })}\n\n`);
