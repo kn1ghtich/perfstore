@@ -35,4 +35,13 @@ async function me(req, res, next) {
   }
 }
 
-module.exports = { register, login, me };
+async function updateProfile(req, res, next) {
+  try {
+    const user = await authService.updateProfile(req.user.id, req.body);
+    res.json({ user });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { register, login, me, updateProfile };

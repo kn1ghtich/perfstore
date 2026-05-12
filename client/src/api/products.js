@@ -24,3 +24,8 @@ export async function fetchCategories() {
   const { data } = await api.get('/categories');
   return data;
 }
+
+export async function fetchStoresForFilter() {
+  const { data } = await api.get('/stores');
+  return data;
+}

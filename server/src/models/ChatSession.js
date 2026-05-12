@@ -8,7 +8,7 @@ const messageSchema = new mongoose.Schema({
 
 const chatSessionSchema = new mongoose.Schema({
   sessionId: { type: String, required: true, unique: true, index: true },
-  userId: { type: Number, default: null },
+  userId: { type: String, default: null },
   messages: [messageSchema],
   metadata: {
     startedAt: { type: Date, default: Date.now },

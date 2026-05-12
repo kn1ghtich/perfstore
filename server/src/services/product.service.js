@@ -1,144 +1,153 @@
-const pool = require('../config/db');
+const Product = require('../models/Product');
+const Review = require('../models/Review');
 
-async function listProducts({ page = 1, limit = 12, brand, category, gender, minPrice, maxPrice, sort, search }) {
+async function listProducts({ page = 1, limit = 12, brand, brands, category, categories, gender, minPrice, maxPrice, sort, search, productIds }) {
   const offset = (page - 1) * limit;
-  const conditions = [];
-  const params = [];
-  let paramIdx = 1;
+  const pipeline = [];
 
-  if (brand) {
-    conditions.push(`b.slug = $${paramIdx++}`);
-    params.push(brand);
+  // Restrict to specific product IDs (e.g. store inventory filter)
+  if (productIds) {
+    const mongoose = require('mongoose');
+    const ids = productIds.map((id) => {
+      try { return new mongoose.Types.ObjectId(id); } catch { return null; }
+    }).filter(Boolean);
+    pipeline.push({ $match: { _id: { $in: ids } } });
   }
-  if (gender) {
-    conditions.push(`p.gender = $${paramIdx++}`);
-    params.push(gender);
+
+  // Filters on product fields
+  const directMatch = {};
+  if (gender) directMatch.gender = gender;
+  if (minPrice !== undefined && minPrice !== null && minPrice !== '') {
+    directMatch.price = directMatch.price || {};
+    directMatch.price.$gte = parseFloat(minPrice);
   }
-  if (minPrice) {
-    conditions.push(`p.price >= $${paramIdx++}`);
-    params.push(parseFloat(minPrice));
-  }
-  if (maxPrice) {
-    conditions.push(`p.price <= $${paramIdx++}`);
-    params.push(parseFloat(maxPrice));
+  if (maxPrice !== undefined && maxPrice !== null && maxPrice !== '') {
+    directMatch.price = directMatch.price || {};
+    directMatch.price.$lte = parseFloat(maxPrice);
   }
   if (search) {
-    conditions.push(`(p.name ILIKE $${paramIdx} OR p.description ILIKE $${paramIdx})`);
-    params.push(`%${search}%`);
-    paramIdx++;
+    directMatch.$or = [
+      { name: { $regex: search, $options: 'i' } },
+      { description: { $regex: search, $options: 'i' } },
+    ];
   }
-  if (category) {
-    conditions.push(`EXISTS (
-      SELECT 1 FROM product_categories pc
-      JOIN categories c ON c.id = pc.category_id
-      WHERE pc.product_id = p.id AND c.slug = $${paramIdx++}
-    )`);
-    params.push(category);
+  if (Object.keys(directMatch).length > 0) {
+    pipeline.push({ $match: directMatch });
   }
 
-  const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+  // Brand lookup
+  pipeline.push({ $lookup: { from: 'brands', localField: 'brand', foreignField: '_id', as: '_brand' } });
+  pipeline.push({ $unwind: { path: '$_brand', preserveNullAndEmptyArrays: true } });
 
-  let orderBy = 'ORDER BY p.created_at DESC';
-  if (sort === 'price_asc') orderBy = 'ORDER BY p.price ASC';
-  else if (sort === 'price_desc') orderBy = 'ORDER BY p.price DESC';
-  else if (sort === 'name') orderBy = 'ORDER BY p.name ASC';
+  // Brand filter — support multiple (comma-separated) or single
+  const brandSlugs = brands
+    ? brands.split(',').map((s) => s.trim()).filter(Boolean)
+    : brand ? [brand] : null;
+  if (brandSlugs && brandSlugs.length > 0) {
+    pipeline.push({ $match: { '_brand.slug': brandSlugs.length === 1 ? brandSlugs[0] : { $in: brandSlugs } } });
+  }
 
-  const countQuery = `
-    SELECT COUNT(*) FROM products p
-    LEFT JOIN brands b ON b.id = p.brand_id
-    ${where}
-  `;
-  const countResult = await pool.query(countQuery, params);
-  const total = parseInt(countResult.rows[0].count);
+  // Category lookup and filter — support multiple (comma-separated) or single
+  pipeline.push({ $lookup: { from: 'categories', localField: 'categories', foreignField: '_id', as: '_categories' } });
+  const catSlugs = categories
+    ? categories.split(',').map((s) => s.trim()).filter(Boolean)
+    : category ? [category] : null;
+  if (catSlugs && catSlugs.length > 0) {
+    pipeline.push({ $match: { '_categories.slug': catSlugs.length === 1 ? catSlugs[0] : { $in: catSlugs } } });
+  }
 
-  const dataQuery = `
-    SELECT p.*, b.name AS brand_name, b.slug AS brand_slug,
-      COALESCE(
-        (SELECT ROUND(AVG(r.rating), 1) FROM reviews r WHERE r.product_id = p.id),
-        0
-      ) AS avg_rating,
-      COALESCE(
-        (SELECT COUNT(*) FROM reviews r WHERE r.product_id = p.id),
-        0
-      ) AS review_count
-    FROM products p
-    LEFT JOIN brands b ON b.id = p.brand_id
-    ${where}
-    ${orderBy}
-    LIMIT $${paramIdx++} OFFSET $${paramIdx++}
-  `;
-  params.push(limit, offset);
+  // Reviews lookup for computed stats
+  pipeline.push({ $lookup: { from: 'reviews', localField: '_id', foreignField: 'product', as: '_reviews' } });
 
-  const result = await pool.query(dataQuery, params);
+  // Computed fields
+  pipeline.push({
+    $addFields: {
+      id: { $toString: '$_id' },
+      avg_rating: { $ifNull: [{ $round: [{ $avg: '$_reviews.rating' }, 1] }, 0] },
+      review_count: { $size: '$_reviews' },
+      brand_name: '$_brand.name',
+      brand_slug: '$_brand.slug',
+      categories: {
+        $map: {
+          input: '$_categories',
+          as: 'cat',
+          in: { name: '$$cat.name', slug: '$$cat.slug', description: '$$cat.description' },
+        },
+      },
+    },
+  });
+
+  pipeline.push({ $project: { _brand: 0, _categories: 0, _reviews: 0, __v: 0 } });
+
+  const sortStage = {};
+  if (sort === 'price_asc') sortStage.price = 1;
+  else if (sort === 'price_desc') sortStage.price = -1;
+  else if (sort === 'name') sortStage.name = 1;
+  else sortStage.created_at = -1;
+
+  const countPipeline = [...pipeline, { $count: 'total' }];
+  const dataPipeline = [...pipeline, { $sort: sortStage }, { $skip: offset }, { $limit: limit }];
+
+  const [countResult, products] = await Promise.all([
+    Product.aggregate(countPipeline),
+    Product.aggregate(dataPipeline),
+  ]);
+
+  const total = countResult[0]?.total ?? 0;
 
   return {
-    products: result.rows,
-    pagination: {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
-    },
+    products,
+    pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
   };
 }
 
 async function getProductBySlug(slug) {
-  const productResult = await pool.query(
-    `SELECT p.*, b.name AS brand_name, b.slug AS brand_slug, b.country AS brand_country,
-      COALESCE(
-        (SELECT ROUND(AVG(r.rating), 1) FROM reviews r WHERE r.product_id = p.id),
-        0
-      ) AS avg_rating,
-      COALESCE(
-        (SELECT COUNT(*) FROM reviews r WHERE r.product_id = p.id),
-        0
-      ) AS review_count
-    FROM products p
-    LEFT JOIN brands b ON b.id = p.brand_id
-    WHERE p.slug = $1`,
-    [slug]
-  );
+  const product = await Product.findOne({ slug })
+    .populate('brand', 'name slug country')
+    .populate('categories', 'name slug description');
 
-  if (productResult.rows.length === 0) {
+  if (!product) {
     const err = new Error('Product not found');
     err.status = 404;
     throw err;
   }
 
-  const product = productResult.rows[0];
+  const [stats] = await Review.aggregate([
+    { $match: { product: product._id } },
+    { $group: { _id: null, avg: { $avg: '$rating' }, count: { $sum: 1 } } },
+  ]);
 
-  const notesResult = await pool.query(
-    'SELECT layer, note FROM product_notes WHERE product_id = $1 ORDER BY layer, id',
-    [product.id]
-  );
+  const result = product.toObject({ virtuals: true });
+  result.brand_name = result.brand?.name;
+  result.brand_slug = result.brand?.slug;
+  result.brand_country = result.brand?.country;
+  result.avg_rating = stats ? Math.round(stats.avg * 10) / 10 : 0;
+  result.review_count = stats?.count ?? 0;
 
-  const categoriesResult = await pool.query(
-    `SELECT c.name, c.slug FROM categories c
-     JOIN product_categories pc ON pc.category_id = c.id
-     WHERE pc.product_id = $1`,
-    [product.id]
-  );
-
-  product.notes = { top: [], middle: [], base: [] };
-  for (const row of notesResult.rows) {
-    product.notes[row.layer].push(row.note);
-  }
-  product.categories = categoriesResult.rows;
-
-  return product;
+  return result;
 }
 
 async function searchProducts(query) {
-  const result = await pool.query(
-    `SELECT p.id, p.name, p.slug, p.price, p.image_url, p.gender,
-            b.name AS brand_name, b.slug AS brand_slug
-     FROM products p
-     LEFT JOIN brands b ON b.id = p.brand_id
-     WHERE p.name ILIKE $1 OR p.description ILIKE $1 OR b.name ILIKE $1
-     LIMIT 20`,
-    [`%${query}%`]
-  );
-  return result.rows;
+  const products = await Product.find({
+    $or: [
+      { name: { $regex: query, $options: 'i' } },
+      { description: { $regex: query, $options: 'i' } },
+    ],
+  })
+    .populate('brand', 'name slug')
+    .limit(20)
+    .select('name slug price original_price image_url gender brand');
+
+  return products.map(p => ({
+    id: p.id,
+    name: p.name,
+    slug: p.slug,
+    price: p.price,
+    image_url: p.image_url,
+    gender: p.gender,
+    brand_name: p.brand?.name,
+    brand_slug: p.brand?.slug,
+  }));
 }
 
 module.exports = { listProducts, getProductBySlug, searchProducts };

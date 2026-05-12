@@ -1,14 +1,19 @@
 const variants = {
-  purple: 'bg-purple-100 text-purple-700',
-  blue: 'bg-blue-100 text-blue-700',
-  green: 'bg-green-100 text-green-700',
-  gray: 'bg-gray-100 text-gray-700',
-  pink: 'bg-pink-100 text-pink-700',
+  purple: { background: 'rgba(167,139,250,0.15)', color: '#c4b5fd', border: '1px solid rgba(167,139,250,0.3)' },
+  blue:   { background: 'rgba(96,165,250,0.12)',  color: '#93c5fd', border: '1px solid rgba(96,165,250,0.25)' },
+  green:  { background: 'rgba(34,197,94,0.12)',   color: '#86efac', border: '1px solid rgba(34,197,94,0.25)' },
+  gray:   { background: 'rgba(255,255,255,0.07)', color: '#c0bcb4', border: '1px solid rgba(255,255,255,0.12)' },
+  pink:   { background: 'rgba(244,114,182,0.12)', color: '#f9a8d4', border: '1px solid rgba(244,114,182,0.25)' },
+  gold:   { background: 'rgba(201,168,76,0.15)',  color: '#C9A84C', border: '1px solid rgba(201,168,76,0.3)' },
 };
 
-export default function Badge({ children, variant = 'purple' }) {
+export default function Badge({ children, variant = 'gray', className = '' }) {
+  const style = variants[variant] || variants.gray;
   return (
-    <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${variants[variant]}`}>
+    <span
+      className={`inline-block px-2.5 py-0.5 text-xs font-medium ${className}`}
+      style={{ ...style, borderRadius: 4 }}
+    >
       {children}
     </span>
   );

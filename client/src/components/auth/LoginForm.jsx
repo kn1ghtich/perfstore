@@ -3,6 +3,19 @@ import { useAuth } from '../../hooks/useAuth';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useNavigate, Link } from 'react-router-dom';
 
+const FIELD = {
+  background: 'var(--input-bg)',
+  border: '1px solid var(--input-border)',
+  color: 'var(--text-primary)',
+  borderRadius: 0,
+  padding: '10px 14px',
+  fontSize: '14px',
+  width: '100%',
+  outline: 'none',
+  boxSizing: 'border-box',
+};
+const LABEL = { display: 'block', fontSize: '11px', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: 6, fontWeight: 500 };
+
 export default function LoginForm() {
   const { login } = useAuth();
   const { t } = useTranslation();
@@ -17,8 +30,8 @@ export default function LoginForm() {
     setError('');
     setLoading(true);
     try {
-      await login(email, password);
-      navigate('/');
+      const data = await login(email, password);
+      navigate(data.user?.role === 'admin' ? '/admin/dashboard' : '/');
     } catch (err) {
       setError(err.response?.data?.error || t('auth.loginFailed'));
     } finally {
@@ -27,40 +40,55 @@ export default function LoginForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-5">
       {error && (
-        <div className="bg-red-50 text-red-600 px-4 py-3 rounded-lg text-sm">{error}</div>
+        <div className="px-4 py-3 text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171' }}>
+          {error}
+        </div>
       )}
+
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{t('auth.email')}</label>
+        <label style={LABEL}>{t('auth.email')}</label>
         <input
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+          style={FIELD}
+          onFocus={(e) => e.target.style.borderColor = 'var(--gold)'}
+          onBlur={(e) => e.target.style.borderColor = 'var(--input-border)'}
+          placeholder="your@email.com"
         />
       </div>
+
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{t('auth.password')}</label>
+        <label style={LABEL}>{t('auth.password')}</label>
         <input
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+          style={FIELD}
+          onFocus={(e) => e.target.style.borderColor = 'var(--gold)'}
+          onBlur={(e) => e.target.style.borderColor = 'var(--input-border)'}
+          placeholder="••••••••"
         />
       </div>
+
       <button
         type="submit"
         disabled={loading}
-        className="w-full bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
+        className="w-full py-3 text-xs tracking-[0.15em] uppercase font-semibold transition-all disabled:opacity-50"
+        style={{ background: loading ? 'var(--gold-dim)' : 'var(--gold)', color: '#000' }}
       >
         {loading ? t('auth.signingIn') : t('auth.signIn')}
       </button>
-      <p className="text-center text-sm text-gray-600">
+
+      <p className="text-center text-xs" style={{ color: 'var(--text-muted)' }}>
         {t('auth.noAccount')}{' '}
-        <Link to="/register" className="text-purple-600 hover:underline">{t('auth.signUpLink')}</Link>
+        <Link to="/register" style={{ color: 'var(--gold)' }} className="hover:underline">
+          {t('auth.signUpLink')}
+        </Link>
       </p>
     </form>
   );

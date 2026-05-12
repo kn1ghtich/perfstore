@@ -1,36 +1,44 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const pool = require('../config/db');
+const User = require('../models/User');
 const env = require('../config/env');
 
-async function register({ email, password, name }) {
-  const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
-  if (existing.rows.length > 0) {
-    const err = new Error('Email already registered');
+async function register({ email: rawEmail, password, name }) {
+  const email = rawEmail.trim().toLowerCase();
+
+  const existing = await User.findOne({ email });
+  if (existing) {
+    const err = new Error('Email уже зарегистрирован');
     err.status = 409;
     throw err;
   }
 
-  const passwordHash = await bcrypt.hash(password, 12);
-  const result = await pool.query(
-    'INSERT INTO users (email, password_hash, name) VALUES ($1, $2, $3) RETURNING id, email, name, created_at',
-    [email, passwordHash, name]
-  );
+  const password_hash = await bcrypt.hash(password, 12);
+  let user;
+  try {
+    user = await User.create({ email, password_hash, name });
+  } catch (err) {
+    if (err.code === 11000) {
+      const e = new Error('Email уже зарегистрирован');
+      e.status = 409;
+      throw e;
+    }
+    throw err;
+  }
 
-  const user = result.rows[0];
   const token = generateToken(user);
-  return { user, token };
+  return { user: _serialize(user), token };
 }
 
-async function login({ email, password }) {
-  const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-  if (result.rows.length === 0) {
+async function login({ email: rawEmail, password }) {
+  const email = rawEmail.trim().toLowerCase();
+  const user = await User.findOne({ email });
+  if (!user) {
     const err = new Error('Invalid email or password');
     err.status = 401;
     throw err;
   }
 
-  const user = result.rows[0];
   const valid = await bcrypt.compare(password, user.password_hash);
   if (!valid) {
     const err = new Error('Invalid email or password');
@@ -39,31 +47,58 @@ async function login({ email, password }) {
   }
 
   const token = generateToken(user);
-  return {
-    user: { id: user.id, email: user.email, name: user.name, created_at: user.created_at },
-    token,
-  };
+  return { user: _serialize(user), token };
 }
 
 async function getProfile(userId) {
-  const result = await pool.query(
-    'SELECT id, email, name, created_at FROM users WHERE id = $1',
-    [userId]
-  );
-  if (result.rows.length === 0) {
+  const user = await User.findById(userId).select('-password_hash');
+  if (!user) {
     const err = new Error('User not found');
     err.status = 404;
     throw err;
   }
-  return result.rows[0];
+  return _serialize(user);
+}
+
+async function updateProfile(userId, fields) {
+  const allowed = ['name', 'first_name', 'last_name', 'phone', 'city', 'delivery_address', 'payment_method', 'avatar'];
+  const update = {};
+  for (const key of allowed) {
+    if (fields[key] !== undefined) update[key] = fields[key];
+  }
+
+  const user = await User.findByIdAndUpdate(userId, update, { new: true }).select('-password_hash');
+  if (!user) {
+    const err = new Error('User not found');
+    err.status = 404;
+    throw err;
+  }
+  return _serialize(user);
+}
+
+function _serialize(user) {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    first_name: user.first_name,
+    last_name: user.last_name,
+    phone: user.phone,
+    city: user.city,
+    delivery_address: user.delivery_address,
+    payment_method: user.payment_method,
+    avatar: user.avatar,
+    role: user.role || 'user',
+    created_at: user.created_at,
+  };
 }
 
 function generateToken(user) {
   return jwt.sign(
-    { id: user.id, email: user.email, name: user.name },
+    { id: user.id, email: user.email, name: user.name, role: user.role || 'user' },
     env.JWT_SECRET,
     { expiresIn: env.JWT_EXPIRES_IN }
   );
 }
 
-module.exports = { register, login, getProfile };
+module.exports = { register, login, getProfile, updateProfile };

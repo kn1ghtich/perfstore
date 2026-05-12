@@ -20,7 +20,7 @@ async function createReview(req, res, next) {
     );
     res.status(201).json({ review });
   } catch (err) {
-    if (err.code === '23505') {
+    if (err.code === 11000) {
       return res.status(409).json({ error: 'You already reviewed this product' });
     }
     next(err);

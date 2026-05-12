@@ -1,12 +1,12 @@
 const { Router } = require('express');
-const pool = require('../config/db');
+const Brand = require('../models/Brand');
 
 const router = Router();
 
 router.get('/', async (req, res, next) => {
   try {
-    const result = await pool.query('SELECT * FROM brands ORDER BY name');
-    res.json({ brands: result.rows });
+    const brands = await Brand.find().sort({ name: 1 });
+    res.json({ brands });
   } catch (err) {
     next(err);
   }

@@ -8,7 +8,12 @@ const STORAGE_KEY = 'perfstore-lang';
 
 export function LanguageProvider({ children }) {
   const [language, setLanguageState] = useState(() => {
-    return localStorage.getItem(STORAGE_KEY) || 'en';
+    const saved = localStorage.getItem(STORAGE_KEY);
+    // If user explicitly chose a language, respect it; otherwise default to Russian
+    if (saved && saved !== 'en') return saved;
+    // Reset old default 'en' to 'ru'
+    localStorage.setItem(STORAGE_KEY, 'ru');
+    return 'ru';
   });
 
   const setLanguage = useCallback((lang) => {

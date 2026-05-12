@@ -1,12 +1,21 @@
 const productService = require('../services/product.service');
+const Store = require('../models/Store');
 
 async function list(req, res, next) {
   try {
-    const { page, limit, brand, category, gender, minPrice, maxPrice, sort, q } = req.query;
+    const { page, limit, brand, brands, category, categories, gender, minPrice, maxPrice, sort, q, store } = req.query;
+
+    let productIds;
+    if (store) {
+      const storeDoc = await Store.findById(store).select('inventory').lean();
+      productIds = storeDoc ? storeDoc.inventory.map((i) => i.product.toString()) : [];
+    }
+
     const result = await productService.listProducts({
       page: parseInt(page) || 1,
       limit: parseInt(limit) || 12,
-      brand, category, gender, minPrice, maxPrice, sort, search: q,
+      brand, brands, category, categories, gender, minPrice, maxPrice, sort, search: q,
+      productIds,
     });
     res.json(result);
   } catch (err) {
