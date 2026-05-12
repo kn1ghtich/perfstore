@@ -13,7 +13,7 @@ async function list(req, res, next) {
 
     const result = await productService.listProducts({
       page: parseInt(page) || 1,
-      limit: parseInt(limit) || 12,
+      limit: parseInt(limit) || 10,
       brand, brands, category, categories, gender, minPrice, maxPrice, sort, search: q,
       productIds,
     });

@@ -1,7 +1,7 @@
 const Product = require('../models/Product');
 const Review = require('../models/Review');
 
-async function listProducts({ page = 1, limit = 12, brand, brands, category, categories, gender, minPrice, maxPrice, sort, search, productIds }) {
+async function listProducts({ page = 1, limit = 10, brand, brands, category, categories, gender, minPrice, maxPrice, sort, search, productIds }) {
   const offset = (page - 1) * limit;
   const pipeline = [];
 
