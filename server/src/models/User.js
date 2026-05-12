@@ -10,6 +10,7 @@ const userSchema = new mongoose.Schema({
   city: { type: String, trim: true, default: '' },
   delivery_address: { type: String, trim: true, default: '' },
   payment_method: { type: String, enum: ['card', 'cash', 'bank_transfer', ''], default: '' },
+  gender: { type: String, enum: ['male', 'female', 'other', ''], default: '' },
   avatar: { type: String, default: '' },
   role:     { type: String, enum: ['user', 'admin'], default: 'user' },
   wishlist: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Product' }],

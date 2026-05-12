@@ -23,6 +23,7 @@ export default function RegisterForm() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [gender, setGender] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -35,7 +36,7 @@ export default function RegisterForm() {
     }
     setLoading(true);
     try {
-      await register(email, password, name);
+      await register(email, password, name, gender);
       navigate('/');
     } catch (err) {
       setError(err.response?.data?.error || t('auth.registrationFailed'));
@@ -93,6 +94,36 @@ export default function RegisterForm() {
           onBlur={(e) => e.target.style.borderColor = 'var(--input-border)'}
           placeholder="Минимум 6 символов"
         />
+      </div>
+
+      <div>
+        <label style={LABEL}>Пол</label>
+        <div className="flex gap-2">
+          {[
+            { value: 'male',   label: 'Мужской' },
+            { value: 'female', label: 'Женский' },
+            { value: 'other',  label: 'Другой' },
+          ].map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setGender(gender === opt.value ? '' : opt.value)}
+              style={{
+                flex: 1,
+                padding: '10px 0',
+                fontSize: '12px',
+                letterSpacing: '0.08em',
+                border: `1px solid ${gender === opt.value ? 'var(--gold)' : 'var(--input-border)'}`,
+                background: gender === opt.value ? 'rgba(201,168,76,0.1)' : 'var(--input-bg)',
+                color: gender === opt.value ? 'var(--gold)' : 'var(--text-secondary)',
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <button

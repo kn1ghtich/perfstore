@@ -3,7 +3,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const env = require('../config/env');
 
-async function register({ email: rawEmail, password, name }) {
+async function register({ email: rawEmail, password, name, gender }) {
   const email = rawEmail.trim().toLowerCase();
 
   const existing = await User.findOne({ email });
@@ -16,7 +16,7 @@ async function register({ email: rawEmail, password, name }) {
   const password_hash = await bcrypt.hash(password, 12);
   let user;
   try {
-    user = await User.create({ email, password_hash, name });
+    user = await User.create({ email, password_hash, name, gender: gender || '' });
   } catch (err) {
     if (err.code === 11000) {
       const e = new Error('Email уже зарегистрирован');
@@ -61,7 +61,7 @@ async function getProfile(userId) {
 }
 
 async function updateProfile(userId, fields) {
-  const allowed = ['name', 'first_name', 'last_name', 'phone', 'city', 'delivery_address', 'payment_method', 'avatar'];
+  const allowed = ['name', 'first_name', 'last_name', 'phone', 'city', 'delivery_address', 'payment_method', 'avatar', 'gender'];
   const update = {};
   for (const key of allowed) {
     if (fields[key] !== undefined) update[key] = fields[key];
@@ -88,6 +88,7 @@ function _serialize(user) {
     delivery_address: user.delivery_address,
     payment_method: user.payment_method,
     avatar: user.avatar,
+    gender: user.gender || '',
     role: user.role || 'user',
     created_at: user.created_at,
   };

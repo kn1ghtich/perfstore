@@ -2,11 +2,11 @@ const authService = require('../services/auth.service');
 
 async function register(req, res, next) {
   try {
-    const { email, password, name } = req.body;
+    const { email, password, name, gender } = req.body;
     if (!email || !password || !name) {
       return res.status(400).json({ error: 'Email, password, and name are required' });
     }
-    const result = await authService.register({ email, password, name });
+    const result = await authService.register({ email, password, name, gender });
     res.status(201).json(result);
   } catch (err) {
     next(err);

@@ -80,6 +80,7 @@ export default function ProfilePage() {
   const [form, setForm] = useState({
     first_name:       user?.first_name       || '',
     last_name:        user?.last_name        || '',
+    gender:           user?.gender           || '',
     phone:            user?.phone            || '',
     city:             user?.city             || '',
     delivery_address: user?.delivery_address || '',
@@ -174,14 +175,44 @@ export default function ProfilePage() {
 
           {/* Personal info */}
           <Section icon={User} title="Личные данные">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Имя">
-                <input type="text" value={form.first_name} onChange={set('first_name')}
-                  placeholder="Аскар" style={FIELD_STYLE} onFocus={focusStyle} onBlur={blurStyle} />
-              </Field>
-              <Field label="Фамилия">
-                <input type="text" value={form.last_name} onChange={set('last_name')}
-                  placeholder="Аскаров" style={FIELD_STYLE} onFocus={focusStyle} onBlur={blurStyle} />
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Имя">
+                  <input type="text" value={form.first_name} onChange={set('first_name')}
+                    placeholder="Аскар" style={FIELD_STYLE} onFocus={focusStyle} onBlur={blurStyle} />
+                </Field>
+                <Field label="Фамилия">
+                  <input type="text" value={form.last_name} onChange={set('last_name')}
+                    placeholder="Аскаров" style={FIELD_STYLE} onFocus={focusStyle} onBlur={blurStyle} />
+                </Field>
+              </div>
+              <Field label="Пол">
+                <div className="flex gap-2">
+                  {[
+                    { value: 'male',   label: 'Мужской' },
+                    { value: 'female', label: 'Женский' },
+                    { value: 'other',  label: 'Другой' },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, gender: f.gender === opt.value ? '' : opt.value }))}
+                      style={{
+                        flex: 1,
+                        padding: '10px 0',
+                        fontSize: '12px',
+                        letterSpacing: '0.08em',
+                        border: `1px solid ${form.gender === opt.value ? 'var(--gold)' : 'var(--input-border)'}`,
+                        background: form.gender === opt.value ? 'rgba(201,168,76,0.1)' : 'var(--input-bg)',
+                        color: form.gender === opt.value ? 'var(--gold)' : 'var(--text-secondary)',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </Field>
             </div>
           </Section>
