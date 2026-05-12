@@ -21,6 +21,7 @@ const slideRoutes        = require('./routes/slide.routes');
 
 const app = express();
 
+
 // ─── Security ──────────────────────────────────────────────────────────────
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' }, // allow images
