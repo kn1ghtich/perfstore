@@ -5,6 +5,7 @@ import { fetchReviews } from '../api/reviews';
 import { subscribeStockAlert } from '../api/notifications';
 import { fetchStoresByProduct } from '../api/stores';
 import NotesPyramid from '../components/product/NotesPyramid';
+import SimilarProducts from '../components/product/SimilarProducts';
 import ReviewList from '../components/review/ReviewList';
 import ReviewForm from '../components/review/ReviewForm';
 import StarRating from '../components/review/StarRating';
@@ -467,6 +468,9 @@ export default function ProductPage() {
 
           <ReviewList reviews={reviews} />
         </section>
+
+        {/* ── Similar products (Stage 2) ── */}
+        <SimilarProducts productId={product?.id} />
 
       </div>
     </div>

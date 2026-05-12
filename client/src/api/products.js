@@ -29,3 +29,13 @@ export async function fetchStoresForFilter() {
   const { data } = await api.get('/stores');
   return data;
 }
+
+export async function fetchRecommendations() {
+  const { data } = await api.get('/auth/recommendations');
+  return data; // { products: [...] }
+}
+
+export async function fetchSimilarProducts(productId) {
+  const { data } = await api.get(`/products/${productId}/similar`);
+  return data; // { products: [...] }
+}

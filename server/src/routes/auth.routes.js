@@ -2,6 +2,7 @@ const { Router } = require('express');
 const authController = require('../controllers/auth.controller');
 const { authenticate } = require('../middleware/auth');
 const User = require('../models/User');
+const { getRecommendations } = require('../services/recommendation.service');
 
 const router = Router();
 
@@ -9,6 +10,14 @@ router.post('/register', authController.register);
 router.post('/login', authController.login);
 router.get('/me', authenticate, authController.me);
 router.put('/profile', authenticate, authController.updateProfile);
+
+// ─── Personalised recommendations (Stage 1) ────────────────────────────────
+router.get('/recommendations', authenticate, async (req, res, next) => {
+  try {
+    const products = await getRecommendations(req.user.id);
+    res.json({ products });
+  } catch (err) { next(err); }
+});
 
 // ─── Wishlist ───────────────────────────────────────────────────────────────
 

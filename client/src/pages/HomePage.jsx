@@ -3,7 +3,9 @@ import { Link } from 'react-router-dom';
 import { fetchProducts, fetchCategories } from '../api/products';
 import ProductCarousel from '../components/product/ProductCarousel';
 import NewsCarousel from '../components/home/NewsCarousel';
+import RecommendationsSection from '../components/home/RecommendationsSection';
 import Spinner from '../components/ui/Spinner';
+import { useAuth } from '../hooks/useAuth';
 import { ArrowRight, Sparkles } from 'lucide-react';
 
 const CAT_EMOJI = {
@@ -17,6 +19,7 @@ const BRANDS = [
 ];
 
 export default function HomePage() {
+  const { user } = useAuth();
   const [featured, setFeatured]     = useState([]);
   const [newArrivals, setNewArrivals] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -128,6 +131,11 @@ export default function HomePage() {
       <section>
         <NewsCarousel />
       </section>
+
+      {/* ═══════════════════════════════════════════
+          PERSONALISED RECOMMENDATIONS (auth only)
+      ═══════════════════════════════════════════ */}
+      {user && <RecommendationsSection />}
 
       {/* ═══════════════════════════════════════════
           POPULAR PRODUCTS
