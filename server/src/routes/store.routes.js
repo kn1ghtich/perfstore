@@ -5,8 +5,19 @@ const router = Router();
 
 router.get('/', async (req, res, next) => {
   try {
-    const stores = await Store.find().sort({ sort_order: 1, createdAt: 1 }).select('name image_filename sort_order');
-    res.json({ stores: stores.map((s) => ({ id: s._id.toString(), name: s.name, image_url: s.image_filename ? `/api/images/${s.image_filename}` : null })) });
+    const stores = await Store.find().sort({ sort_order: 1, createdAt: 1 })
+      .select('name description address phone working_hours image_filename sort_order');
+    res.json({
+      stores: stores.map((s) => ({
+        id:            s._id.toString(),
+        name:          s.name,
+        description:   s.description  || '',
+        address:       s.address      || '',
+        phone:         s.phone        || '',
+        working_hours: s.working_hours|| '',
+        image_url:     s.image_filename ? `/api/images/${s.image_filename}` : null,
+      })),
+    });
   } catch (err) { next(err); }
 });
 
