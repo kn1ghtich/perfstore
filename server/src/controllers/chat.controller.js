@@ -1,7 +1,8 @@
-const { v4: uuidv4 } = require('uuid');
-const ChatSession = require('../models/ChatSession');
-const Product     = require('../models/Product');
-const env         = require('../config/env');
+const { v4: uuidv4 }   = require('uuid');
+const ChatSession      = require('../models/ChatSession');
+const Product          = require('../models/Product');
+const env              = require('../config/env');
+const knowledgeService = require('../services/knowledge.service');
 
 // ─── Occasion / style / mood → category mapping ──────────────────────────────
 const OCCASION_MAP = [
@@ -211,12 +212,61 @@ function formatProducts(products) {
   }).join('\n\n');
 }
 
+// ─── Intent completeness check ───────────────────────────────────────────────
+function isIntentComplete(intent) {
+  // Enough to query: either gender is known OR at least one category/occasion is set
+  return !!(intent.gender || intent.categorySlugs.length > 0 || intent.occasions.length > 0);
+}
+
+// ─── Guided elicitation question ─────────────────────────────────────────────
+function buildClarifyingQuestion(userProfile) {
+  if (!userProfile?.gender) {
+    return 'Подскажите, аромат подбираем для мужчины или женщины? Это поможет мне найти лучшие варианты! 🌸';
+  }
+  if (!userProfile?.occasion) {
+    return 'Для какого случая подбираем аромат? Например: на каждый день, для офиса, романтического свидания или особого вечера?';
+  }
+  return 'Есть ли предпочтения по семейству ароматов или бюджету? Например: цветочные, восточные, свежие; или укажите удобный ценовой диапазон.';
+}
+
+// ─── Detect intent type ───────────────────────────────────────────────────────
+function isGreeting(text) {
+  return /^(привет|здравствуй|добрый\s+\w+|хай|hello|hi|хэлло|добро пожаловать|privet)\b/i.test(text.trim());
+}
+
+function isProductQuery(text) {
+  return /аромат|духи|парфюм|запах|порекоменд|посовет|подбери|что у вас|покажи|каталог|купить|подойдёт|подойдет/i.test(text);
+}
+
+// ─── Accumulate user profile from intent ─────────────────────────────────────
+function updateUserProfile(session, intent) {
+  const p = session.userProfile || {};
+  if (intent.gender)   p.gender   = intent.gender;
+  if (intent.maxPrice) p.maxPrice = intent.maxPrice;
+  if (intent.minPrice) p.minPrice = intent.minPrice;
+  if (intent.occasions.length > 0 && !p.occasion) p.occasion = intent.occasions[0];
+  if (!Array.isArray(p.likedCategories)) p.likedCategories = [];
+  for (const cat of intent.categorySlugs) {
+    if (!p.likedCategories.includes(cat)) p.likedCategories.push(cat);
+  }
+  session.userProfile = p;
+  session.markModified('userProfile');
+}
+
 // ─── Catalog context builder ─────────────────────────────────────────────────
-async function buildCatalogContext(userMessage, messageHistory = []) {
+async function buildCatalogContext(userMessage, messageHistory = [], userProfile = {}) {
   try {
     let intent = extractIntent(userMessage);
     // Inherit missing context from recent conversation history
     intent = mergeWithHistory(intent, messageHistory);
+
+    // Seed from accumulated user profile (lowest priority — history and message override)
+    if (!intent.gender && userProfile.gender)     intent.gender   = userProfile.gender;
+    if (!intent.maxPrice && userProfile.maxPrice) intent.maxPrice = userProfile.maxPrice;
+    if (!intent.minPrice && userProfile.minPrice) intent.minPrice = userProfile.minPrice;
+    if (intent.categorySlugs.length === 0 && userProfile.likedCategories?.length > 0) {
+      intent.categorySlugs = [...userProfile.likedCategories];
+    }
 
     // Описание фильтров для ИИ (чтобы он знал что искали)
     const filterDesc = [];
@@ -273,7 +323,15 @@ async function buildCatalogContext(userMessage, messageHistory = []) {
 
     // Explicit allowlist — helps small models (llama3.2) stick to listed products
     const allowedNames = products.map(p => `"${p.brand?.name || ''} — ${p.name}"`).join(', ');
-    return `\n\n${occasionHint}АКТУАЛЬНЫЙ КАТАЛОГ PERFSTORE — ${header}\n${formatProducts(products)}\n\nСТРОГО ЗАПРЕЩЕНО: называть любые ароматы НЕ из списка выше.\nРАЗРЕШЕНО рекомендовать ТОЛЬКО: ${allowedNames}.\nЛюбой другой бренд или аромат — ОШИБКА.`;
+    const catalogBlock = `\n\n${occasionHint}АКТУАЛЬНЫЙ КАТАЛОГ PERFSTORE — ${header}\n${formatProducts(products)}\n\nСТРОГО ЗАПРЕЩЕНО: называть любые ароматы НЕ из списка выше.\nРАЗРЕШЕНО рекомендовать ТОЛЬКО: ${allowedNames}.\nЛюбой другой бренд или аромат — ОШИБКА.`;
+
+    // Append relevant knowledge chunks for richer advice
+    const relevantChunks = knowledgeService.findRelevantChunks(userMessage, 2);
+    const knowledgeBlock = relevantChunks.length > 0
+      ? `\n\nЭКСПЕРТНЫЕ ЗНАНИЯ (используй для совета, не цитируй дословно):\n${relevantChunks.join('\n\n')}`
+      : '';
+
+    return catalogBlock + knowledgeBlock;
   } catch (err) {
     console.error('[Chat] buildCatalogContext error:', err.message);
     return '';
@@ -343,8 +401,48 @@ async function sendMessage(req, res, next) {
 
     const userContent = content.trim();
 
-    // Build catalog context using current message + conversation history
-    const catalogContext = await buildCatalogContext(userContent, session.messages);
+    // ── Guided elicitation: check intent before hitting the catalog ──────────
+    if (isProductQuery(userContent) && !isGreeting(userContent)) {
+      const quickIntent = extractIntent(userContent);
+      mergeWithHistory(quickIntent, session.messages);
+      // Also apply accumulated profile to the quick check
+      if (!quickIntent.gender && session.userProfile?.gender)
+        quickIntent.gender = session.userProfile.gender;
+      if (quickIntent.categorySlugs.length === 0 && session.userProfile?.likedCategories?.length > 0)
+        quickIntent.categorySlugs = [...session.userProfile.likedCategories];
+
+      if (!isIntentComplete(quickIntent)) {
+        const question = buildClarifyingQuestion(session.userProfile);
+
+        // Set SSE headers before writing
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no');
+
+        res.write(`data: ${JSON.stringify({ token: question })}\n\n`);
+        res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+        res.end();
+
+        session.messages.push({ role: 'user',      content: userContent, timestamp: new Date() });
+        session.messages.push({ role: 'assistant',  content: question,    timestamp: new Date() });
+        session.metadata.lastMessageAt = new Date();
+        await session.save();
+        return;
+      }
+    }
+
+    // Build catalog context using current message + conversation history + userProfile
+    const catalogContext = await buildCatalogContext(
+      userContent,
+      session.messages,
+      session.userProfile || {},
+    );
+
+    // Update accumulated user profile from current message intent
+    const currentIntent = extractIntent(userContent);
+    mergeWithHistory(currentIntent, session.messages);
+    updateUserProfile(session, currentIntent);
 
     // Add user message
     session.messages.push({ role: 'user', content: userContent, timestamp: new Date() });
@@ -376,8 +474,8 @@ async function sendMessage(req, res, next) {
       return;
     }
 
-    // Trim to last 10 messages to avoid context window overflow
-    const messagesForAI = session.messages.slice(-10);
+    // Trim to last 20 messages for a longer memory window
+    const messagesForAI = session.messages.slice(-20);
 
     try {
       for await (const token of aiService.streamChat(messagesForAI, catalogContext)) {
